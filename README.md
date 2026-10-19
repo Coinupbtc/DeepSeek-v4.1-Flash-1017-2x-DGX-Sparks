@@ -84,7 +84,7 @@ memory during it was 2.67 GiB, 0.17 GiB above the 2.5 GiB floor `memguard` was s
 limit for a head that carries ~6 GiB of other software. A 100K-token prompt also ran without errors at the full
 1,048,576-token window (3.14 GiB free at the lowest) and at 524,288 tokens.
 
-**Engine patches** (`zig/patches/`, three, written for this recipe). Each is **off by default**, so the image behaves like
+**Engine patches** (`zig/patches/`, four, written for this recipe). Each is **off by default**, so the image behaves like
 the pinned engine: its replies' token hashes equal the unpatched image's on 31 of 31 prompts (1 to 100,000 tokens, cached-prefix
 resumes, four at once, a three-conversation scenario; `tools/exact.py`). Each is switched on with a `TF_DS_*` variable, which
 `start.sh` gives to both ranks, and each was tested on its own:
@@ -94,15 +94,17 @@ resumes, four at once, a three-conversation scenario; `tools/exact.py`). Each is
 | `TF_DS_CACHE_PLACEMENT=1` (gone) | Measured on the earlier pin: in the three-conversation scenario conversation B's second turn used to miss the prompt cache and re-read its whole 6K-token prompt; with the patch it reused 4,096, with an identical reply. The pin is now `629c524`, whose engine places kept states itself (a conversation sharing a prefix copies the shared rows to a free extent); the patch was removed and the scenario was not re-measured on it. |
 | `TF_DS_ENGRAM_LANES=2` (off) | A second I/O ring for the prompt's Engram reads. Bit-identical, but prefill 1.5-2.6% *slower* from 8K to 131K: the drive is the limit. |
 | `TF_DS_IDX_SPLIT=1` (off) | Splits the prefill indexer's rows between the two ranks. Bit-identical, with no measurable gain on this pair (modeled at +1% at 64K and +2% at 128K; the undisturbed 32K repetitions tie the baseline). If the two ranks ever disagree on the setting the pair hangs, so it stays off. |
+| `TF_DS_PREFILL_INTERLEAVE_MS=250` (off) | Patch 0005, issue #3: between two 2,048-row chunks of a prompt pass, the other live streams decode for up to 250 ms and their cancels are taken. Measured on a second pair (contributed, see the PR): a chat decoding while a cold 24K-token prompt prefilled went from **no token for 10.2 s** to a longest gap of **0.99 s** (16 → 64 tokens during the pass); the long prompt took 12.4 s instead of 11.0 s; solo TTFT and decode unchanged. Replies bit-identical to the unpatched `629c524` image off, on, and on with drafts off. Only rank 0 reads the setting (rank 1 follows its frames), so the ranks cannot disagree. |
 
 Known limits of the engine, from user reports (issues [#2](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/issues/2) and
 [#3](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/issues/3), read in `lanes.zig` and `lane_host.zig` of the pinned engine): a prompt that
 carries images runs whole and keeps nothing ("a kept state knows no images"), so every turn of a conversation with images in its
 history is cold (~90 s at 160K tokens in the report); and a prompt pass runs to completion inside its admission, so other streams
 get no decode round meanwhile and a cancel waits for it (the pin `629c524` only lets streams within 256 tokens of `max_tokens`
-finish, for up to 5 s, after a pass of a second or more; measured on the pair: a decoding stream got no token for 90 s while a 120K-token cold prompt prefilled). Both are in BertholomusAI's engine, not in the recipe's scripts. Until
-they change upstream: keep screenshots out of long agent histories, and do not start a cold long prompt while another chat is
-decoding. `ENGINE=jl` interleaves prompt pieces with other slots' decode (`TF_DSV41_PREFILL_PIECES`); its image prompt reuse
+finish, for up to 5 s, after a pass of a second or more; measured on the pair: a decoding stream got no token for 90 s while a 120K-token cold prompt prefilled). Both are in BertholomusAI's engine, not in the recipe's scripts. The second
+has a switch now: `TF_DS_PREFILL_INTERLEAVE_MS=250` in `scripts/local.sh` (patch 0005, off by default) gives the other streams
+their rounds and cancels between a pass's chunks, so a decoding stream waits about one chunk (~1 s) instead of the whole pass.
+Until the first changes upstream: keep screenshots out of long agent histories. `ENGINE=jl` interleaves prompt pieces with other slots' decode (`TF_DSV41_PREFILL_PIECES`); its image prompt reuse
 was not tested here.
 
 What is **not** checked: image input and `tools/validate.py` on this pair; other cabling, hardware or a head with less

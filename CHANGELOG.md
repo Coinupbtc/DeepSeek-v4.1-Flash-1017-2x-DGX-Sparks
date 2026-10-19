@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Issue [#3](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/issues/3): `zig/patches/0005-prefill-interleave.patch`, switched
+  on with `TF_DS_PREFILL_INTERLEAVE_MS=N` (off by default; 250 measured). Between two 2,048-row chunks of a prompt pass rank 0 runs the
+  other live streams' decode rounds for up to N ms, delivers their tokens and takes their cancels; rank 1 follows the frames as before.
+  Contributed and measured on another pair (EAQ v1 checkpoint and this recipe's pins and chat template, 1,048,576 window, 4 streams, its own
+  TP2 launcher, not `start.sh`): a decoding chat's longest gap while a cold 24K-token prompt prefilled 10.2 s → 0.99 s; replies bit-identical
+  to the unpatched image (needle + prose, temperature 0) off, on, and on with drafts off; `zig build test` 21/21 steps, 222/222 tests
+  (the new one: a decoding stream gets tokens during another's pass and its cancel lands before that pass ends). Not run on this pair, with
+  `tools/exact.py`, sparkDash, or with 0001/0002 switched on at the same time.
 - Issues [#2](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/issues/2),
   [#3](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/issues/3),
   [#4](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/issues/4) (reported by lukemdanastasi): `TF_REF` moves from
