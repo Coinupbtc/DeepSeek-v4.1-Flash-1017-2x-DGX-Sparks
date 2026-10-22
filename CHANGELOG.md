@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- `zig/patches/0012-tool-call-prose.patch` (always on): the text a reply writes before its tool calls is the reply's
+  content, without the two newlines that start the calls, as the checkpoint's reference parser reads it
+  (`encoding/encoding.py`, `parse_message_from_completion_text`: the calls start at `\n\n<｜DSML｜ calls`; `render_message`
+  writes `content + "\n\n" + calls` back). A reply without streaming used to return `"content": null` whenever it made
+  calls, so the client never saw the text (in one case a 3,671-character plan) and sent the turn back without it. A
+  streamed reply sent the two newlines as content, so a client that keeps the content as it arrived sent back
+  `text\n\n\n\n<｜DSML｜ calls>`. Measured on a pair: three long tool-calling replies (thinking high, 780-4,757 characters of
+  reasoning, 2,369-3,645 of text) sent back as they streamed now give the next prompt exactly the generated tokens (3 of 3;
+  before: 0 of 3, each diverging right before the calls), and the non-streamed reply's turn sent back as returned does
+  too. Reply ids are unchanged (greedy, seeded temperature 1, thinking, a tool call, a 10K-token prompt). A streamed
+  paragraph break now waits for the next token before it is sent. By **Coinupbtc**.
+
 - Optional `systemd/dsv41-tensorfold.service` and `docs/systemd.md`: a manually configured user service for the existing
   foreground launcher, with `PREPARE=0`, a 60-second failure restart delay and at most three starts in 30 minutes.
   Nothing installs or enables it automatically. Unit validation and opt-in transient stub tests cover failure exits,
