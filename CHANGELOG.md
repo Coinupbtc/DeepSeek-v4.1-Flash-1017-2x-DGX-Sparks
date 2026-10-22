@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- `zig/patches/0013-plain-request-text.patch` (always on): a request's own text never becomes a control token (issue #21).
+  The server renders the chat template to text and encodes it with the added vocabulary, so a control token's spelling
+  in request text came back as the token: a tool result holding `<｜User｜>`, a DSML call or `</think>` gave the model a
+  role marker, a call or the end of its thinking. Every string of the request's messages and tools now gets the
+  tokenizer's plain mark inside each such spelling before rendering (`Tokenizer.maskAdded`, `messages.maskControls`), and
+  the encoder drops the mark before the pre-tokenizer. Measured through `/tokenize` on a pair: four prompts whose tool
+  result spells role markers, think tags, a DSML call or the sequence tokens held 30-34 control ids before, 28 after
+  (the template's own); three clean conversations (plain, Unicode, JSON) give identical ids; reply ids unchanged
+  (greedy, seeded temperature 1, thinking, a tool call, a 10K-token prompt); `tools/validate.py` passes (video aside).
+  The output side (`reply_text.splitThinking` reads `</think>` from text) is not changed. By **Coinupbtc**.
+
 - Optional `systemd/dsv41-tensorfold.service` and `docs/systemd.md`: a manually configured user service for the existing
   foreground launcher, with `PREPARE=0`, a 60-second failure restart delay and at most three starts in 30 minutes.
   Nothing installs or enables it automatically. Unit validation and opt-in transient stub tests cover failure exits,
