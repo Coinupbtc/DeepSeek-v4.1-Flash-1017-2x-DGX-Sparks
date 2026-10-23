@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- README: what one stream reserves out of the pool at admission (`prompt + max_tokens + ROUND_ROWS + 2`, aligned to
+  2,048), with a measurement of four concurrent 500,601-token prompts in a 2,097,152-position pool. By **Maciej Kowalik
+  ([koniaik](https://github.com/koniaik))**, [pull request #56](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/56).
 - `zig/patches/0029-anthropic-budget-default.patch` (always on): the Anthropic frontend accepts `thinking: {"type":
   "enabled"}` without `budget_tokens`; such a request gets the server's `--thinking-budget` default, as an OpenAI-format
   request without `thinking_budget` already does (stock refused it: `thinking.budget_tokens must be positive and less than
