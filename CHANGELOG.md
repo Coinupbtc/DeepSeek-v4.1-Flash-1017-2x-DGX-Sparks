@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- `zig/patches/0027-tool-call-prose.patch` (always on): the text a reply writes before its tool calls is the reply's
+  content, without the two newlines that start the calls, as the checkpoint's reference parser reads it
+  (`encoding/encoding.py`, `parse_message_from_completion_text`: the calls start at `\n\n<｜DSML｜ calls`; `render_message`
+  writes `content + "\n\n" + calls` back). A reply without streaming used to return `"content": null` whenever it made
+  calls, so the client never saw the text (in one case a 3,671-character plan) and sent the turn back without it. A
+  streamed reply sent the two newlines as content, so a client that keeps the content as it arrived sent back
+  `text\n\n\n\n<｜DSML｜ calls>`. Measured on a pair: three long tool-calling replies (thinking high, 780-4,757 characters of
+  reasoning, 2,369-3,645 of text) sent back as they streamed now give the next prompt exactly the generated tokens (3 of 3;
+  before: 0 of 3, each diverging right before the calls), and the non-streamed reply's turn sent back as returned does
+  too. Reply ids are unchanged (greedy, seeded temperature 1, thinking, a tool call, a 10K-token prompt). A streamed
+  paragraph break now waits for the next token before it is sent. By **[Coinupbtc](https://github.com/Coinupbtc)**, [pull request #44](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/44) (sent as `0012`).
 - **Rank 0's memory with long prompts:** `zig/patches/0023-server-prepare-memory.patch`, a fix to the base engine after
   the port's series (also offered alone as its own pull request). A prompt's render and tokenization kept their scratch
   in the request's memory until the reply ended: a resumed ~948K-token conversation held ~1.3-1.5 GB on rank 0, and
