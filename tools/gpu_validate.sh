@@ -468,7 +468,8 @@ log "phases: $PHASES; configurations: $CONFIGS; receipts: $RECEIPTS$( (( DRY )) 
 # ---------------------------------------------------------------- preflight
 if has preflight; then
   [[ "$(hostname)" == *gx10-a* || "${GPU_VALIDATE_HOST_OK:-0}" == 1 ]] || die "run this on gx10-a (rank 0), not $(hostname) (GPU_VALIDATE_HOST_OK=1 overrides)"
-  case "$SESS" in /tmp/*|/var/tmp/*) die "SESS must not be under /tmp on the Sparks: $SESS" ;; esac
+  # (a dry run executes nothing: tools/selftest.py runs it from a temporary folder, /tmp on Linux)
+  (( DRY )) || case "$SESS" in /tmp/*|/var/tmp/*) die "SESS must not be under /tmp on the Sparks: $SESS" ;; esac
   case "$SPILL_DIR" in "$SESS"/*) ;; *) die "SPILL_DIR must be under $SESS (it is wiped before the spill suites): $SPILL_DIR" ;; esac
   if (( ! DRY )); then
     for c in docker python3 curl git ssh sudo; do command -v "$c" >/dev/null || die "$c is not installed"; done
