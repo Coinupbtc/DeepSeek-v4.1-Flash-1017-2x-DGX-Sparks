@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `ABLIT=1` on a read-only Hugging Face blob cache: `prepare.sh` gives the overlay's work folder its own writable copy of
+  the checkpoint index (the shards stay hard links), so the graft no longer fails with `PermissionError` when it rewrites
+  the index (issue #42, reported by unitea1992). By **Robert Wojciechowski ([wojo](https://github.com/wojo) on GitHub,
+  [@rwojo](https://x.com/rwojo) on X)**, [pull request #45](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/45);
+  regression test `scripts/test_ablit_index_writable.sh`.
 - Each rank's container log rotates (`LOG_MAX_SIZE`, default `100m`, and `LOG_MAX_FILE`, 3; `LOG_MAX_SIZE=` leaves the
   docker daemon's settings): the engine writes an access line for every response, so a 1 s monitoring poll grew rank 0's
   log by ~265k lines a day for as long as it ran (issue #49, reported by eleata). Checked by the `start.sh` dry-run
