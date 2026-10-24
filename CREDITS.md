@@ -126,6 +126,10 @@ License 2.0 ([`LICENSE`](LICENSE)); [`NOTICE`](NOTICE) carries the notices that 
 - **`zig/patches/0027-tool-call-prose.patch`** (the text before a reply's tool calls is its content) was authored by
   **[Coinupbtc](https://github.com/Coinupbtc)** in [pull request #44](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/44)
   (commit `3ff606e`, sent as `0012`; carried as sent, renumbered after the port's series).
+- **`zig/patches/0028-plain-request-text.patch`** (a request's own text never becomes a control token, issue #21) was authored by
+  **[Coinupbtc](https://github.com/Coinupbtc)** in [pull request #43](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/43)
+  (commit `d330a6d`, sent as `0013`); renumbered after the port's series, its tokenizer hunk merged onto `0023`'s
+  `encodeText`, and the Anthropic `count_tokens` route's masking added, by Mia's AI Lab.
 - **`zig/patches/0004-call-gate.patch`** (`tool_choice` enforcement) was written by Mia's AI Lab (Apache-2.0). Its new file,
   `zig/src/core/lanes/call_gate.zig`, is Mia's AI Lab's Zig call gate for the Flash Next CUDA engine (commits `49350ed6` and
   `c948979c` of 2026-10-07, with fixes `06cbbf72` and `1b082936`), which is itself a port of the call gate in TensorFold's

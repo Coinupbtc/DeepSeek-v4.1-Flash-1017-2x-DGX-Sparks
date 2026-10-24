@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- `zig/patches/0028-plain-request-text.patch` (always on): a request's own text never becomes a control token (issue #21).
+  The server renders the chat template to text and encodes it with the added vocabulary, so a control token's spelling
+  in request text came back as the token: a tool result holding `<｜User｜>`, a DSML call or `</think>` gave the model a
+  role marker, a call or the end of its thinking. Every string of the request's messages and tools now gets the
+  tokenizer's plain mark inside each such spelling before rendering (`Tokenizer.maskAdded`, `messages.maskControls`), and
+  the encoder drops the mark before the pre-tokenizer. Measured through `/tokenize` on a pair: four prompts whose tool
+  result spells role markers, think tags, a DSML call or the sequence tokens held 30-34 control ids before, 28 after
+  (the template's own); three clean conversations (plain, Unicode, JSON) give identical ids; reply ids unchanged
+  (greedy, seeded temperature 1, thinking, a tool call, a 10K-token prompt); `tools/validate.py` passes (video aside).
+  The output side (`reply_text.splitThinking` reads `</think>` from text) is not changed. The Anthropic `count_tokens` route masks the same way (added when ported). By **[Coinupbtc](https://github.com/Coinupbtc)**, [pull request #43](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/43) (sent as `0013`).
 - `zig/patches/0027-tool-call-prose.patch` (always on): the text a reply writes before its tool calls is the reply's
   content, without the two newlines that start the calls, as the checkpoint's reference parser reads it
   (`encoding/encoding.py`, `parse_message_from_completion_text`: the calls start at `\n\n<｜DSML｜ calls`; `render_message`
