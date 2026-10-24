@@ -220,7 +220,9 @@ API_URL=http://<head-address>:8888 python3 tools/toolcheck.py    # also needle.p
 ```
 
 `stop.sh` saves each rank's log (gzipped, newest 10 kept, `LOG_KEEP`) to `~/.cache/dsv41-tensorfold/logs` before it removes
-the container.
+the container. While a rank runs, docker rotates its log at `LOG_MAX_SIZE` (`100m`), keeping `LOG_MAX_FILE` (3) files: the
+engine writes a line for every response, so a monitoring poll (`/health`, `/metrics`) no longer grows it without end (#49).
+`LOG_MAX_SIZE=` (empty) leaves the docker daemon's own log settings.
 
 ## Abliterated mode
 

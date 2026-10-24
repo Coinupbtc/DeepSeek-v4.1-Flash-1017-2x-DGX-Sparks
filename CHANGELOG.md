@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Each rank's container log rotates (`LOG_MAX_SIZE`, default `100m`, and `LOG_MAX_FILE`, 3; `LOG_MAX_SIZE=` leaves the
+  docker daemon's settings): the engine writes an access line for every response, so a 1 s monitoring poll grew rank 0's
+  log by ~265k lines a day for as long as it ran (issue #49, reported by eleata). Checked by the `start.sh` dry-run
+  golden test (`scripts/port_test.sh`).
 - README: what one stream reserves out of the pool at admission (`prompt + max_tokens + ROUND_ROWS + 2`, aligned to
   2,048), with a measurement of four concurrent 500,601-token prompts in a 2,097,152-position pool. By **Maciej Kowalik
   ([koniaik](https://github.com/koniaik))**, [pull request #56](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/56).

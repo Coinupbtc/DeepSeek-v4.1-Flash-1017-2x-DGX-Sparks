@@ -570,12 +570,14 @@ EOF
     awk 'p { print; p = 0 } /^\[dry-run\] rank [01] / { p = 1 }' "$G_T/$out.log" > "$G_T/$out"
     [[ "$(wc -l < "$G_T/$out" | tr -d ' ')" == 2 ]] || { echo "start.sh ($tree) printed no two docker commands:"; tail -5 "$G_T/$out.log"; return 1; }
   }
-  # gcmp <out> <pool or -> <token>...: <out> with every token (each must be there) and the tf.recipe.port label removed,
+  # gcmp <out> <pool or -> <token>...: <out> with every token (each must be there), the tf.recipe.port label and the
+  # container log's rotation (LOG_MAX_SIZE, issue #49; both ranks must carry it) removed,
   # and rank 1's --pool <pool> put back to --pool 1048576, equals the base's commands (GBASE: which base run, base.out)
   gcmp() {
     local out=$1 pool=$2 tok x b=${GBASE:-base.out}; shift 2
-    x=$(sed -E 's/ --label tf\.recipe\.port=[^ ]+//' "$G_T/$out")
+    x=$(sed -E -e 's/ --label tf\.recipe\.port=[^ ]+//' -e 's/ --log-driver json-file --log-opt max-size=[^ ]+ --log-opt max-file=[^ ]+//' "$G_T/$out")
     [[ "$(grep -c -- ' --label tf\.recipe\.port=' "$G_T/$out")" == 2 ]] || { echo "not both ranks carry tf.recipe.port"; return 1; }
+    [[ "$(grep -c -- ' --log-driver json-file --log-opt max-size=100m --log-opt max-file=3 ' "$G_T/$out")" == 2 ]] || { echo "not both ranks carry the container log's rotation (LOG_MAX_SIZE, #49)"; return 1; }
     for tok in "$@"; do
       [[ "$x" == *" $tok"* ]] || { echo "missing: $tok"; return 1; }
       x=${x/" $tok"/}   # its first occurrence: a token both ranks get is listed twice
@@ -589,6 +591,12 @@ EOF
     grun port off.out SPILL_GIB=0 KV_SHARD=0 || exit 1
     [[ "$(grep -c -- " --label tf\.recipe\.port=off " "$G_T/off.out")" == 2 ]] || { echo "the label is not off on both ranks"; exit 1; }
     gcmp off.out -'
+  check_ "golden: LOG_MAX_SIZE= (empty) leaves the daemon's log settings: no rotation flags (#49)" '
+    grun port nolog.out SPILL_GIB=0 KV_SHARD=0 LOG_MAX_SIZE= || exit 1
+    ! grep -q -- "--log-opt" "$G_T/nolog.out" || { echo "a rotation flag with LOG_MAX_SIZE empty"; exit 1; }
+    diff "$G_T/base.out" <(sed -E "s/ --label tf\.recipe\.port=[^ ]+//" "$G_T/nolog.out")'
+  check_ "golden: a LOG_MAX_SIZE that is not a size refuses the start (#49)" '
+    ! grun port badlog.out LOG_MAX_SIZE="100m;true" 2>/dev/null && grep -q "LOG_MAX_SIZE is a size" "$G_T/badlog.out.log"'
   check_ "golden: KV_SHARD=1 POOL=2101248 adds only its variables to $gbase's POOL=2101248 (0008: TF_DS_POOL, TF_DS_WINDOW, --pool)" '
     grun base basepool.out POOL=2101248 || exit 1
     grep -q -- "-e TF_DS_POOL=2101248 -e TF_DS_WINDOW=1048576 " "$G_T/basepool.out" && grep -q -- "--pool 2101248 " "$G_T/basepool.out" || { echo "the base does not map POOL"; exit 1; }
