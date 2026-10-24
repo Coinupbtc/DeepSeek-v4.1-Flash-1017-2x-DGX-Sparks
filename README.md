@@ -12,19 +12,23 @@ through an OpenAI-compatible API, with the full **1,048,576-token window**, **im
 or off, and **DSpark** speculative decoding from the checkpoint's own draft blocks, using
 [TensorFold](https://github.com/ashhart/TensorFold)'s native Zig engine and the 2.9 bit EXL3 quantization
 [`Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw`](https://huggingface.co/Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw)
-(196 GiB; experimental: its model card has no perplexity or KL measurement against the unquantized model).
+(196 GiB; its model card has no perplexity or KL measurement against the unquantized model). EAQ v1 is the recommended
+pack; the experimental EAQ v1.1 pack is opt-in with `EAQ_V1_1=1`.
 
 - Checkpoint: `Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw` (39 shards, routed experts at 3 bits a
   weight, 2 bits in layers 18-22, attention at 5, shared experts at 4-5, head at 6, DSpark blocks at 4; the vision tower
-  and the DSpark blocks are in it; the revision is pinned in `scripts/config.sh`), plus Engram's two tables, unquantized,
-  from `deepseek-ai/DeepSeek-V4.1-Flash-1017` @ `1bae0e10` (shards 47 and 48, ~203 GB; the quantization leaves them out)
+  and the DSpark blocks are in it; the revision is pinned in `scripts/config.sh`), plus Engram's two tables, unquantized, from
+  `deepseek-ai/DeepSeek-V4.1-Flash-1017` @ `1bae0e10` (shards 47 and 48, ~203 GB; the quantization leaves them out).
+  `EAQ_V1_1=1` switches to `Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1.1-2.9-bpw` @ `aee640e2` (39 shards, ~196 GiB;
+  27 indexer/compressor linears are BF16 and load as plain BF16 linears through patch `0024`'s mixed-pack loader)
 - API model id: `DeepSeek-V4.1-Flash-1017`, port 8888
 - Engine: TensorFold native (Zig 0.17.0), BertholomusAI's `dsv41` family at TP=2, one rank on each Spark
 - One command on the first Spark: `./start.sh` sets up both Sparks and starts both ranks; `./stop.sh` stops them
 - Optional [systemd user service](docs/systemd.md): supervise both ranks with preparation disabled, delayed restarts
   and a start limit. Copy and enable it manually; the recipe does not install a service.
-- Optional `ABLIT=1`: keeps Mia EAQ 2.9 bpw and applies the matching [Keys overlay by drowzeys](https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated).
-  Requires your Hugging Face token and access to that gated repository; see [Abliterated mode](#abliterated-mode).
+- Optional `ABLIT=1`: keeps Mia EAQ v1 2.9 bpw (the default) and applies the matching [Keys overlay by drowzeys](https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated).
+  Requires your Hugging Face token and access to that gated repository; leave `EAQ_V1_1=0`; see
+  [Abliterated mode](#abliterated-mode).
 
 ## Status
 
@@ -92,7 +96,7 @@ the load, 4.9 at 159K tokens, 4.2 at 261K), and a larger `CONTEXT` only allows l
 such a head, or free more of its memory first. A 100K-token prompt also ran without errors at the full
 1,048,576-token window (3.14 GiB free at the lowest) and at 524,288 tokens.
 
-**Engine patches** (`zig/patches/`; `zig/patches/README.md` lists them). The indexer split runs by default in chunks ending at token 131,072 or later; idle RDMA back-off is also enabled. The recorded token-hash checks cover 31 prompts through 100,000 tokens, cached resumes and four concurrent streams. Each switch is a `TF_DS_*` or `TF_RDMA_*` variable, which
+**Engine patches** (`zig/patches/`; `zig/patches/README.md` lists them). The indexer split runs by default in chunks ending at token 131,072 or later; idle RDMA back-off is also enabled. EAQ v1.1's mixed-pack loader (`0024` + `zig/patches-inputs/0001`), its BF16 -> f32 widen (`0025` + `zig/patches-inputs/0002`) and its plain-linears row padding (`0026`, `TF_DS_PLAIN_ROWS`) are automatic. The recorded token-hash checks cover 31 prompts through 100,000 tokens, cached resumes and four concurrent streams. Each switch is a `TF_DS_*` or `TF_RDMA_*` variable, which
 `start.sh` gives to both ranks, and each was tested on its own:
 
 | Switch | Result |
@@ -180,7 +184,7 @@ watchdog exists because that can freeze a Spark; see [Memory and safety](#memory
   leave `HEAD_NFS_SERVER` empty. Set `PREPARE=0` too: `scripts/prepare.sh` assumes a complete cache and would start downloading
   the 196 GiB checkpoint into a partial one.
 
-The former default checkpoint revision `6d54be4f` no longer resolves on the Hub. The default now pins `45ee5d0f`; changing revisions changes the Hugging Face snapshot path and may require another 196 GiB download. Keep an existing local snapshot only by explicitly setting `MODEL_REVISION` and using the documented cached/offline preparation flow.
+The former default checkpoint revision `6d54be4f` no longer resolves on the Hub. The default now pins `45ee5d0f` (EAQ v1); `EAQ_V1_1=1` pins `aee640e2` (EAQ v1.1). Changing revisions changes the Hugging Face snapshot path and may require another 196 GiB download. Keep an existing local snapshot only by explicitly setting `MODEL_REVISION` and using the documented cached/offline preparation flow.
 
 ## Quick start
 
@@ -221,9 +225,10 @@ the container.
 ## Abliterated mode
 
 `ABLIT` accepts **`0` or `1`** (default `0`). Set it in the environment, `scripts/local.sh` or `.env`.
-`ABLIT=0` serves the stock Mia EAQ v1 2.9 bpw checkpoint. `ABLIT=1` keeps that checkpoint and applies
-`exl3_wo_b_l10_35_mia29.safetensors` from
-[`drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated`](https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated).
+`ABLIT=0` serves the stock checkpoint (`MODEL_ID`/`MODEL_REVISION`; the default is Mia EAQ v1 2.9 bpw).
+`ABLIT=1` keeps the **EAQ v1** 2.9 bpw checkpoint and applies `exl3_wo_b_l10_35_mia29.safetensors` from
+[`drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated`](https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated);
+it is refused when `EAQ_V1_1=1`, so leave `EAQ_V1_1=0` (the default) for it.
 This repository supplies overlays, not a full checkpoint. The recipe uses its **matching Mia 2.9 bpw** overlay and
 `apply_mia29_wo_b_graft.py`; the FP8, LibertAI 3.5 bpw and Jayleaton 2.8 bpw sidecars are for other packs.
 
@@ -303,7 +308,8 @@ Settings come from the environment, `scripts/local.sh` or `.env`; the defaults a
 
 | Setting | Default | |
 | --- | --- | --- |
-| `MODEL_ID`, `MODEL_REVISION` | `Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw` @ `45ee5d0f` | the checkpoint. The Hub repo was renamed from `...-1017-EAQ-v1-2.9-bpw` (the old name redirects), and the Hugging Face cache is keyed by the repo's name and revision: a copy under the old name or an older revision (e.g. `e8ac7684`, which the Hub no longer has) is not found under the default, and `scripts/prepare.sh` would download 196 GiB. It now stops when the disk cannot hold that. To keep serving a copy you have, set both to what `~/.cache/huggingface/hub` holds |
+| `EAQ_V1_1` | 0 | `0`: EAQ v1 (the recommended pack); `1`: the experimental EAQ v1.1 mixed pack (27 BF16 indexer/compressor linears; the image's mixed-pack loader handles them) |
+| `MODEL_ID`, `MODEL_REVISION` | `Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw` @ `45ee5d0f` | the checkpoint. `EAQ_V1_1=1` selects `Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1.1-2.9-bpw` @ `aee640e2`; an explicit `MODEL_ID`/`MODEL_REVISION` wins. The Hugging Face cache is keyed by the repo's name and revision: a copy under another name or revision is not found under the default, and `scripts/prepare.sh` would download 196 GiB. It stops when the disk cannot hold that. To keep serving a copy you have, set both to what `~/.cache/huggingface/hub` holds. v1.1's 27 BF16 linears load through the image's mixed-pack loader (`zig/patches/0024` + `zig/patches-inputs/0001`); the load prints `mixed pack: 27 float linears`. An EXL3-only pack (EAQ v1) has no plain entries and takes the old path |
 | `ABLIT` | 0 | `0`: stock Mia EAQ 2.9 bpw; `1`: apply the matching gated Keys overlay; requires your HF token and repository access (see Abliterated mode) |
 | `ABLIT_REVISION` | `0bdc2036113c4fdda38ef6005b3cbc0bc0dfa0f0` | pinned Keys overlay and application script; full commit hash |
 | `HF_TOKEN` | unset | Hugging Face read token for downloads; alternatively authenticate with `hf auth login` on the head |
@@ -461,7 +467,7 @@ scripts/port.sh              the ported features' settings (spill v2, KV shardin
 scripts/port_test.sh         checks of scripts/port.sh (no Sparks needed)
 scripts/port-patches.sh      exports engine work after the port's series as zig/patches/0024-..., checked on a clean TF_REF
 scripts/publish-image.sh     pushes the built image to ghcr.io (only on purpose)
-zig/Dockerfile, zig/patches  the engine image; patches to the pinned engine (seven by hand, then the port's series 0011 to 0022)
+zig/Dockerfile, zig/patches  the engine image; patches to the pinned engine (see `zig/patches/README.md`)
 model/chat_template.jinja    the chat template rank 0 serves
 tools/validate.py            an end-to-end check of a running server
 tools/bench.py               prefill, decode, multi-stream and needle measurements as JSON, with `--compare A.json B.json`
@@ -485,11 +491,13 @@ third-party parts keep theirs ([`NOTICE`](NOTICE)).
 
 - **[DeepSeek](https://huggingface.co/deepseek-ai)**: DeepSeek-V4.1-Flash-1017, its weights, its DSpark draft blocks, its
   Engram tables and its reference inference code (MIT).
-- **Mia's AI Lab** ([Mia-AiLab](https://huggingface.co/Mia-AiLab)): the EAQ v1 EXL3 2.9 bpw quantization served here,
+- **Mia's AI Lab** ([Mia-AiLab](https://huggingface.co/Mia-AiLab)): the EAQ v1 EXL3 2.9 bpw quantization served by default,
   [`Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw`](https://huggingface.co/Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw)
-  (MIT), the earlier release
+  (MIT), the experimental EAQ v1.1 pack
+  [`Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1.1-2.9-bpw`](https://huggingface.co/Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1.1-2.9-bpw)
+  (opt-in with `EAQ_V1_1=1`), the earlier release
   [`Mia-AiLab/DeepSeek-V4.1-Flash-EXL3-2.9bpw`](https://huggingface.co/Mia-AiLab/DeepSeek-V4.1-Flash-EXL3-2.9bpw) whose
-  per-tensor widths it equals, and the chat template (`model/chat_template.jinja`, written for that earlier release).
+  per-tensor widths they equal, and the chat template (`model/chat_template.jinja`, written for that earlier release).
 - **[turboderp](https://github.com/turboderp-org)**: [ExLlamaV3](https://github.com/turboderp-org/exllamav3), the EXL3 format
   and its quantizer (MIT).
 - **[drowzeys](https://huggingface.co/drowzeys)**: authored the optional [Keys abliteration overlay and Mia EAQ 2.9 bpw

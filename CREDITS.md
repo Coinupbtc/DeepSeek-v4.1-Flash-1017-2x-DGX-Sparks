@@ -12,15 +12,28 @@ License 2.0 ([`LICENSE`](LICENSE)); [`NOTICE`](NOTICE) carries the notices that 
   shards 47 and 48 of this release; `scripts/prepare.sh` downloads them.
 - **[`Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw`](https://huggingface.co/Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw)**
   by Mia's AI Lab ([Mia-AiLab](https://huggingface.co/Mia-AiLab)) (MIT): the EAQ v1 EXL3 quantization this recipe serves
-  (experimental; its model card measures no quality against the source model). The weights are not part of this repository.
+  by default (experimental; its model card measures no quality against the source model). The experimental EAQ v1.1 pack
+  [`Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1.1-2.9-bpw`](https://huggingface.co/Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1.1-2.9-bpw)
+  is opt-in with `EAQ_V1_1=1`; its model card says EAQ v1 stays the recommended pack. The weights are not part of this
+  repository.
 - **[`Mia-AiLab/DeepSeek-V4.1-Flash-EXL3-2.9bpw`](https://huggingface.co/Mia-AiLab/DeepSeek-V4.1-Flash-EXL3-2.9bpw)** by
-  Mia's AI Lab: the earlier EXL3 release whose per-tensor widths the checkpoint above equals (46,702 comparable tensors, by
+  Mia's AI Lab: the earlier EXL3 release whose per-tensor widths both EAQ packs equal (46,702 comparable tensors, by
   its model card), and the checkpoint the dsv41 family's two-node recipe was written against.
 - **[ExLlamaV3](https://github.com/turboderp-org/exllamav3)** by turboderp ([turboderp-org](https://github.com/turboderp-org)) (MIT): the
   EXL3 format and its quantizer.
 
 ## Engine
 
+- **EAQ v1.1 support** (`EAQ_V1_1=1`) was authored by **Mykhailo Tamarin** ([MykhailoTamarin](https://github.com/MykhailoTamarin))
+  in [pull request #57](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/57) (Apache-2.0):
+  **`zig/patches/0024-mixed-pack.patch`** and **`zig/patches-inputs/0001-mixed-pack-rank-cache.patch`** (the EAQ v1.1 mixed
+  pack: the rank-cache planner plans a BF16 `.weight` linear where an EXL3 pack has trellis/suh/svh, and the engine runs
+  it as a plain BF16 linear through the vision tower's cuBLAS `linearBf16`), **`zig/patches/0025-widen-bf16.patch`** and
+  **`zig/patches-inputs/0002-widen-bf16.patch`** (widen a BF16 checkpoint tensor to the f32 entry the loaders plan for
+  it; EAQ's eight `attn.indexer.weights_proj.weight` are BF16), **`zig/patches/0026-plain-rows.patch`** (a mixed pack's
+  plain linears over a fixed row count, `TF_DS_PLAIN_ROWS`), the `EAQ_V1_1` setting and its pins, the second checkout's
+  patches in `zig/Dockerfile`, and `scripts/test_mixed_pack_patch.py`. His patches `0009`, `0011` and `0012` were
+  renumbered `0024`-`0026` and rebased after the port's series by Mia's AI Lab.
 - **[TensorFold](https://github.com/ashhart/TensorFold)** by Ash Hart ([ashhart](https://github.com/ashhart)) and the
   TensorFold contributors (Apache-2.0): the native Zig engine, its OpenAI-compatible server, its lane core, CUDA runtime,
   Triton AOT loader and EXL3 module.

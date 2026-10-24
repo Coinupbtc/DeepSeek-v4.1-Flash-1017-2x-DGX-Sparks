@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Prepare two Sparks to serve Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw with TensorFold's native engine. The
+# Prepare two Sparks to serve Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw (EAQ v1; EAQ_V1_1=1 for the
+# experimental v1.1 pack) with TensorFold's native engine. The
 # checkpoint, the kit and the served folder land on this Spark; the worker reads them over NFS:
 #   1. preflight: docker and the GPU on both Sparks, key-based ssh, the link between them
 #   2. the engine image on this Spark (zig/Dockerfile: BertholomusAI's TensorFold fork at TF_REF plus zig/patches, and
@@ -17,7 +18,8 @@
 # Pass --rebuild to rebuild the image from scratch; PULL=0 never pulls a published image. VERIFY_SHA=1 also checks Engram's shards against the sha256 the
 # checkpoint's model card lists (a few minutes of reading 203 GB).
 # ABLIT=1 applies Keys' matching Mia EAQ 2.9 bpw overlay in a separate folder. Requires your Hugging Face read token
-# (HF_TOKEN or hf auth login) AND access to https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated.
+# (HF_TOKEN or hf auth login) AND access to https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated;
+# EAQ_V1_1 must be 0 (the default).
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 source ./scripts/config.sh
@@ -73,10 +75,10 @@ if [[ $REBUILD -eq 0 && "${PULL:-1}" == 1 && "$built" != "$hash" ]]; then
 fi
 if [[ $REBUILD -eq 1 || "$built" != "$hash" ]]; then
   docker image inspect "$BASE_IMAGE" >/dev/null 2>&1 || { log "Pulling $BASE_IMAGE"; docker pull "$BASE_IMAGE" >/dev/null; }
-  log "Building $IMAGE (TensorFold ${TF_REF:0:12} + inputs' tools ${INPUTS_REF:0:12}, $(compgen -G 'zig/patches/*.patch' | wc -l) patches, Zig $ZIG_VERSION; two Zig builds, ~6 min on a Spark)"
+  log "Building $IMAGE (TensorFold ${TF_REF:0:12} + inputs' tools ${INPUTS_REF:0:12}, $(compgen -G 'zig/patches/*.patch' | wc -l) engine + $(compgen -G 'zig/patches-inputs/*.patch' | wc -l) inputs patches, Zig $ZIG_VERSION; two Zig builds, ~6 min on a Spark)"
   ctx=$(mktemp -d "$STATE_DIR/build.XXXXXX")
   trap 'rm -rf -- "$ctx"' EXIT
-  mkdir -p "$ctx/zig"; cp -r zig/patches "$ctx/zig/patches"; cp zig/Dockerfile "$ctx/Dockerfile"
+  mkdir -p "$ctx/zig"; cp -r zig/patches "$ctx/zig/patches"; cp -r zig/patches-inputs "$ctx/zig/patches-inputs"; cp zig/Dockerfile "$ctx/Dockerfile"
   nocache=(); [[ $REBUILD -eq 1 ]] && nocache=(--no-cache)
   docker build "${nocache[@]}" -t "$IMAGE" -f "$ctx/Dockerfile" --build-arg BASE_IMAGE="$BASE_IMAGE" \
     --build-arg TF_REPO="$TF_REPO" --build-arg TF_REF="$TF_REF" --build-arg INPUTS_REF="$INPUTS_REF" \

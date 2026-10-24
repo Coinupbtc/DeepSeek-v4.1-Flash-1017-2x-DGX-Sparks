@@ -35,6 +35,35 @@
   replies byte-identical to the stock engine in every configuration; resuming a 237k-token conversation from disk
   after a restart takes 1.7 s against 118 s recomputed. By **Robert Wojciechowski** ([wojo](https://github.com/wojo) on GitHub, [@rwojo](https://x.com/rwojo) on X), pull request
   [#30](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/30).
+- The default checkpoint stays EAQ v1 (`Mia-AiLab/DeepSeek-V4.1-Flash-1017-EXL3-EAQ-v1-2.9-bpw` @ `45ee5d0f`, 39 shards,
+  ~196 GiB); the experimental EAQ v1.1 pack is opt-in with `EAQ_V1_1=1` (`...-EXL3-EAQ-v1.1-2.9-bpw` @ `aee640e2`). v1.1
+  keeps EAQ v1's widths but stores 27 indexer/compressor linears as BF16, so the engine must have the mixed-pack loader.
+  `ABLIT=1` works with the v1 default and is refused when v1.1 is selected. `scripts/test_checkpoint_pin.py` checks both
+  pins. The recorded `tools/exact.py` token hashes are EAQ v1's; v1.1's weights differ, so record a new baseline before
+  comparing replies. EAQ v1.1 support by **Mykhailo Tamarin** ([MykhailoTamarin](https://github.com/MykhailoTamarin)), pull request
+  [#57](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/57) (this entry and the three below; its engine
+  patches rebased after the port's series as `0024`-`0026`).
+- Mixed-pack loader: `zig/patches/0024-mixed-pack.patch` and `zig/patches-inputs/0001-mixed-pack-rank-cache.patch`.
+  The rank-cache planner reads the checkpoint's headers and, for a whole replicated linear stored as a BF16 `.weight`
+  instead of trellis/suh/svh, plans one plain entry. The serving engine loads that entry as a plain BF16 linear and runs
+  it through cuBLAS (`cublas.Blas.linearBf16`, torch's bf16 `nn.Linear`) in decode and prefill, with the exact
+  bf16 -> fp32 widen where the caller wants fp32. EAQ v1.1's 27 linears are 8 `attn.wq_a`, 8 `attn.indexer.wq_b`,
+  4 `attn.compressor.wkv`, 3 `attn.compressor.wgate` and 4 `attn.indexer.wk`; the load prints
+  `mixed pack: 27 float linears`. An EXL3-only pack (EAQ v1) plans no plain entries and runs exactly as before, so the
+  same image serves both. The patch is checked against `TF_REF`/`INPUTS_REF` by `scripts/test_mixed_pack_patch.py`. (#57)
+- BF16 sources widen to the f32 entries the loaders plan: `zig/patches-inputs/0002-widen-bf16.patch` in the rank-cache
+  writer, and `zig/patches/0025-widen-bf16.patch` in the engine's checkpoint reader. EAQ v1.1 (as v1) stores the eight
+  `attn.indexer.weights_proj.weight` tensors as BF16 while both plans ask for f32, so the first rank-cache write stopped
+  with `error: UnsupportedConversion`; the widen is exact (BF16's bits in the high half, zeros below), the loader's
+  `.to(torch.float32)`. `scripts/test_mixed_pack_patch.py` checks both patches. (#57)
+- A mixed pack's plain (cuBLAS) linear runs over a fixed number of rows: `zig/patches/0026-plain-rows.patch` and
+  `TF_DS_PLAIN_ROWS` (default 16, never beyond a round's rows; `0` turns the padding off). cuBLAS picks its kernel and
+  split-K from the GEMM's shape and its rounding follows the pick, so a decode round whose row count changes with the
+  streams or the draft block could change a token's bits. On the pair, without it, drafts-on and drafts-off replies
+  matched 4 of 8 `tools/validate.py` prompts, and its 8-concurrent check matched 4 of 8 with drafts off (6 of 8 with
+  drafts on); with it, the saved replies matched 8 of 8, the 8-at-once check matched 8 of 8 with drafts on and off, and
+  all 31 `tools/exact.py` cases were identical with drafts on vs off. The EXL3 linears are untouched: their kernels
+  compute each row in a fixed order, which is why EAQ v1 kept the same bits across round shapes. (#57)
 
 - Optional `systemd/dsv41-tensorfold.service` and `docs/systemd.md`: a manually configured user service for the existing
   foreground launcher, with `PREPARE=0`, a 60-second failure restart delay and at most three starts in 30 minutes.
