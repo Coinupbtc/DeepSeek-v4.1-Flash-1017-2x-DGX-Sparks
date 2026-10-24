@@ -130,6 +130,10 @@ License 2.0 ([`LICENSE`](LICENSE)); [`NOTICE`](NOTICE) carries the notices that 
   **[Coinupbtc](https://github.com/Coinupbtc)** in [pull request #43](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/43)
   (commit `d330a6d`, sent as `0013`); renumbered after the port's series, its tokenizer hunk merged onto `0023`'s
   `encodeText`, and the Anthropic `count_tokens` route's masking added, by Mia's AI Lab.
+- **`zig/patches/0029-anthropic-budget-default.patch`** (the Anthropic frontend accepts thinking without `budget_tokens`) was
+  authored by **Maciej Kowalik ([koniaik](https://github.com/koniaik))** in [pull request #53](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/53)
+  (commit `ba7b21e`, sent as `0014`); renumbered, and changed by Mia's AI Lab so that a `budget_tokens` that is sent but
+  invalid is still refused.
 - **`zig/patches/0004-call-gate.patch`** (`tool_choice` enforcement) was written by Mia's AI Lab (Apache-2.0). Its new file,
   `zig/src/core/lanes/call_gate.zig`, is Mia's AI Lab's Zig call gate for the Flash Next CUDA engine (commits `49350ed6` and
   `c948979c` of 2026-10-07, with fixes `06cbbf72` and `1b082936`), which is itself a port of the call gate in TensorFold's

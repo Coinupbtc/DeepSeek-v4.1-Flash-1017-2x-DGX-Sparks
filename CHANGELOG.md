@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `zig/patches/0029-anthropic-budget-default.patch` (always on): the Anthropic frontend accepts `thinking: {"type":
+  "enabled"}` without `budget_tokens`; such a request gets the server's `--thinking-budget` default, as an OpenAI-format
+  request without `thinking_budget` already does (stock refused it: `thinking.budget_tokens must be positive and less than
+  max_tokens`). A `budget_tokens` that is sent is checked and passed on as before (zero, negative, not an integer or not
+  below `max_tokens` is still refused). By **Maciej Kowalik ([koniaik](https://github.com/koniaik))**, [pull request #53](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/53) (sent as `0014`; the refusal of a `budget_tokens` that is sent but invalid kept when ported).
 - `zig/patches/0028-plain-request-text.patch` (always on): a request's own text never becomes a control token (issue #21).
   The server renders the chat template to text and encodes it with the added vocabulary, so a control token's spelling
   in request text came back as the token: a tool result holding `<｜User｜>`, a DSML call or `</think>` gave the model a
