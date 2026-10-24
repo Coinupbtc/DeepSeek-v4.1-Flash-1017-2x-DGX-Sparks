@@ -431,6 +431,10 @@ Measured on a 2x DGX Spark serving (`POOL=2097152`, drafts on, the pool of `0008
 
 “Computed prefill” counts prompt tokens processed again; “cached prefill” counts reused prompt tokens. Fresh unrelated prompts, including the default randomized `tools/bench.py` workload, are expected to have no cache hits. For a continuing long conversation, check the server's cached-token counters and use `python3 tools/prompt_reuse.py --require-counter`; a dashboard showing zero may also mean it does not read the server's counter. Short prompts may not retain a snapshot.
 
+`/health`'s `prefill_tokens_per_second` is set when a prompt pass ends and shown for 2 s after it (the engine's
+`zig/src/core/lane_host.zig`), so it reads 0 for the whole of a long pass: a dashboard showing high power with no decode
+and prefill 0 is usually one long cold prefill, not a hang (#18, #34).
+
 A Spark's GPU shares its memory with the host. A rank that takes all of it does not get a clean error: the machine stops
 answering and has to be power-cycled (this happened once, with the engine's reserve lowered to 10 GiB). So:
 
